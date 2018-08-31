@@ -22,6 +22,7 @@ public class MainActivity extends AppCompatActivity {
     private String path = "/storage/emulated/0/weiwei/play.mp4";
     private String rtmpPath = "rtmp://live.hkstv.hk.lxdns.com/live/hks";
     private String udpPath = "udp://127.0.0.1:1234";
+    private String localRtmpPath = "rtmp://localhost:1935";
 
     private String outPath = "/storage/emulated/0/weiwei/test3.ts";
 
@@ -37,6 +38,11 @@ public class MainActivity extends AppCompatActivity {
         bt_decoder.setOnClickListener(v->
                 new Thread(() -> utils.demuxMedia(rtmpPath, udpPath)).start()
             );
+
+        Button bt_encoder = findViewById(R.id.bt_encoder);
+        bt_encoder.setOnClickListener(v->
+                new Thread(() -> utils.encoderAudio("/storage/emulated/0/weiwei/tdjm.pcm", "/storage/emulated/0/weiwei/tdjm1.aac")).start()
+        );
 
     }
 

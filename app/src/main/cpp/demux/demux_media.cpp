@@ -57,8 +57,8 @@ int DemuxMedia::openInput() {
 
 int DemuxMedia::openOutput() {
     // 输出流格式 flv rtmp流 ，mpegts裸流
-    int ret = avformat_alloc_output_context2(&outputContext,NULL,"mpegts",dstFilePath);
-    //int ret = avformat_alloc_output_context2(&outputContext,NULL,"flv",dstFilePath);
+   // int ret = avformat_alloc_output_context2(&outputContext,NULL,"mpegts",dstFilePath);
+    int ret = avformat_alloc_output_context2(&outputContext,NULL,"flv",dstFilePath);
 
     if(ret < 0){
         char buf[1024] = {0};
@@ -68,7 +68,9 @@ int DemuxMedia::openOutput() {
     }
     ret = avio_open2(&outputContext->pb,dstFilePath,AVIO_FLAG_WRITE,0,0);
     if(ret < 0){
-        LOGE("avio_open2 failed!");
+        char buf[1024] = {0};
+        av_strerror(ret,buf, sizeof(buf));
+        LOGE("avio_open2 failed! %s",buf);
         return ret;
     }
 

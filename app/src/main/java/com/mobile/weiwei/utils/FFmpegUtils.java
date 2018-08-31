@@ -14,5 +14,11 @@ public class FFmpegUtils {
      */
     public native void demuxMedia(String path,String dstPath);
 
+    /**
+     * pcm to acc
+     * @param path
+     * @param dstPath
+     */
+    public native void encoderAudio(String path,String dstPath);
 
 }

@@ -12,4 +12,11 @@
         android:layout_height="wrap_content"
         android:text="解码"/>
 
+    <Button
+        android:id="@+id/bt_encoder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="编码"
+        app:layout_constraintLeft_toRightOf="@id/bt_decoder"/>
+
 </android.support.constraint.ConstraintLayout>

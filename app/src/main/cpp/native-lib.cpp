@@ -6,6 +6,7 @@ extern "C"{
 #include <libavcodec/jni.h>
 }
 
+#include "encoder_audio.h"
 #include "demux_media.h"
 DemuxMedia* demuxMedia= NULL;
 
@@ -53,6 +54,19 @@ Java_com_mobile_weiwei_utils_FFmpegUtils_demuxMedia(JNIEnv *env, jobject instanc
             break;
         }
     }
+
+    env->ReleaseStringUTFChars(path_, path);
+    env->ReleaseStringUTFChars(dstPath_, dstPath);
+}extern "C"
+JNIEXPORT void JNICALL
+Java_com_mobile_weiwei_utils_FFmpegUtils_encoderAudio(JNIEnv *env, jobject instance, jstring path_,
+                                                      jstring dstPath_) {
+    const char *path = env->GetStringUTFChars(path_, 0);
+    const char *dstPath = env->GetStringUTFChars(dstPath_, 0);
+
+    Encoder* encoder = new Encoder(path,dstPath);
+    encoder->start();
+
 
     env->ReleaseStringUTFChars(path_, path);
     env->ReleaseStringUTFChars(dstPath_, dstPath);

@@ -4,6 +4,7 @@ set(DIR_OS ${CMAKE_CURRENT_SOURCE_DIR}/src/main/jniLibs/${ANDROID_ABI})
 set(DIR_FFMPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/ffmpeg)
 set(DIR_DEMUX ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/demux)
 set(DIR_COMMON ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/common)
+set(DIR_ENCODER ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/encoder)
 
 # set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${DIR_OS})
 
@@ -11,6 +12,7 @@ include_directories(
         ${DIR_FFMPEG_INCLUDE}
         ${DIR_DEMUX}
         ${DIR_COMMON}
+        ${DIR_ENCODER}
         )
 
 add_library(avcodec SHARED IMPORTED)
@@ -36,6 +38,8 @@ add_library(
              SHARED
 
              ${DIR_DEMUX}/demux_media.cpp
+
+             ${DIR_ENCODER}/encoder_audio.cpp
 
              src/main/cpp/native-lib.cpp )
 
