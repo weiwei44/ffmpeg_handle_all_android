@@ -1,195 +1,230 @@
-//
-// Created by BMW on 2018/8/31.
-// 待处理
-//
-
 #include "encoder_audio.h"
 #include "AndroidLog.h"
 
-static bool check_sample_fmt(const AVCodec *codec, enum AVSampleFormat sample_fmt){
-    const enum AVSampleFormat *p = codec->sample_fmts;
-    while (*p != AV_SAMPLE_FMT_NONE){
-        if (*p == sample_fmt)
-            return true;
-        p++;
-    }
-    return false;
-}
-
-static int select_sample_rate(const AVCodec* codec){
-    const int *p;
-    int best_samplerate = 0;
-
-    if (!codec->supported_samplerates)
-        return 44100;
-
-    p = codec->supported_samplerates;
-    while (*p) {
-        if (!best_samplerate || abs(44100 - *p) < abs(44100 - best_samplerate))
-            best_samplerate = *p;
-        p++;
-    }
-    return best_samplerate;
-}
-
-static int select_channel_layout(const AVCodec *codec)
+Pcm2AAC::Pcm2AAC()
 {
-    const uint64_t *p;
-    uint64_t best_ch_layout = 0;
-    int best_nb_channels   = 0;
-
-    if (!codec->channel_layouts)
-        return AV_CH_LAYOUT_STEREO;
-
-    p = codec->channel_layouts;
-    while (*p) {
-        int nb_channels = av_get_channel_layout_nb_channels(*p);
-
-        if (nb_channels > best_nb_channels) {
-            best_ch_layout    = *p;
-            best_nb_channels = nb_channels;
-        }
-        p++;
-    }
-    return best_ch_layout;
-}
-
-
-Encoder::Encoder(const char* url,const char* dstUrl) {
-    av_register_all(); //注册封装器
-    avcodec_register_all(); //注册解码器
-    avformat_network_init();  //初始化网络
-
-    inputUrl = new char[strlen(url)+1];
-    strcpy(inputUrl,url);
-
-    outputUrl = new char[strlen(dstUrl)+1];
-    strcpy(outputUrl,dstUrl);
-
-}
-
-Encoder::~Encoder() {
-
-}
-
-
-void Encoder::encode(AVCodecContext *ctx, AVFrame *frame, AVPacket *pkt, FILE *output) {
-
-    int ret;
-    ret = avcodec_send_frame(ctx,frame);
-
-    if(ret < 0){
-        LOGE("Error sending the frame to the encoder\n");
-        return;
-    }
-
-    while (ret >= 0){
-        ret = avcodec_receive_packet(ctx,pkt);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            return;
-        else if (ret < 0) {
-            LOGE("Error encoding audio frame\n");
-            break;
-        }
-
-        fwrite(pkt->data, 1, pkt->size, output);
-        av_packet_unref(pkt);
+    for (int i = 0; i < 8; i++)
+    {
+        m_PcmPointer[i] = new char[10240];
     }
 }
 
-void Encoder::start() {
 
+Pcm2AAC::~Pcm2AAC()
+{
+    avcodec_send_frame(c, NULL);
+    char *pOut = NULL;
+    int iSize = 0;
+    while (GetData(pOut, iSize))
+    {
+
+    }
+    for (int i = 0; i < 8; i++)
+    {
+        delete[] m_PcmPointer[i] ;
+    }
+    if (NULL != packet)
+    {
+        av_packet_free(&packet);
+    }
+    if (NULL != frame)
+    {
+        av_frame_free(&frame);
+    }
+    if (NULL != c)
+    {
+        avcodec_free_context(&c);
+    }
+    if (NULL != resample_context)
+    {
+        swr_free(&resample_context);
+    }
+
+}
+bool Pcm2AAC::Init(int pcm_Sample_rate, AVSampleFormat pcm_Sample_fmt, int pcm_Channels)
+{
+    m_PcmFormat = pcm_Sample_fmt;
+    m_PcmChannel = pcm_Channels;
+    m_PcmSampleRate = pcm_Sample_rate;
+    av_register_all();
+    avcodec_register_all();
     codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
     if (!codec) {
         LOGE("Codec not found\n");
-        return;
+        return false;
     }
-
     c = avcodec_alloc_context3(codec);
     if (!c) {
         LOGE("Could not allocate audio codec context\n");
-        return;
+        return false;
     }
-
-    /* put sample parameters */
+    c->channels = m_PcmChannel;
+    c->channel_layout = av_get_default_channel_layout(m_PcmChannel);
+    c->sample_rate = m_PcmSampleRate;
+    c->sample_fmt = AV_SAMPLE_FMT_FLTP;//AV_SAMPLE_FMT_FLTP;
     c->bit_rate = 64000;
+    /* Allow the use of the experimental AAC encoder. */
+    c->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 
-    c->sample_fmt = AV_SAMPLE_FMT_FLTP;
 
-    if (!check_sample_fmt(codec, c->sample_fmt)) {
-        LOGE("Encoder does not support sample format %s",
-                av_get_sample_fmt_name(c->sample_fmt));
-        return;
-    }
-
-    c->sample_rate    = select_sample_rate(codec);
-    c->channel_layout = select_channel_layout(codec);
-    c->channels       = av_get_channel_layout_nb_channels(c->channel_layout);
-
+    /* open it */
     if (avcodec_open2(c, codec, NULL) < 0) {
-        fprintf(stderr, "Could not open codec\n");
-        return;
+        LOGE( "Could not open codec\n");
+        return false;
     }
-
-    in_file = fopen(inputUrl,"rb");
-    f = fopen(outputUrl, "wb");
-    if (!f) {
-        LOGE( "Could not open %s\n", outputUrl);
-        return;
+    packet = av_packet_alloc();
+    if (NULL == packet)
+    {
+        return false;
     }
-
-    pkt = av_packet_alloc();
-    if (!pkt) {
-        LOGE("could not allocate the packet\n");
-        return;
-    }
-
-    /* frame containing input raw audio */
     frame = av_frame_alloc();
-    if (!frame) {
-        LOGE("Could not allocate audio frame\n");
-        return;
+    if (NULL == frame)
+    {
+        return false;
+    }
+    resample_context = swr_alloc_set_opts(NULL, c->channel_layout, c->sample_fmt,
+                                          c->sample_rate, c->channel_layout, m_PcmFormat, c->sample_rate, 0, NULL);
+    if (NULL == resample_context)
+    {
+        LOGE("Could not allocate resample context\n");
+        return false;
+    }
+    if (swr_init(resample_context) < 0)
+    {
+        LOGE( "Could not open resample context\n");
+        return false;
     }
 
-    frame->nb_samples     = c->frame_size;
-    frame->format         = c->sample_fmt;
+    return true;
+}
+void Pcm2AAC::AddData(char *pData, int size)
+{
+    memcpy(m_Pcm+m_PcmSize, pData, size);
+    m_PcmSize = m_PcmSize + size;
+    int data_size = av_get_bytes_per_sample(m_PcmFormat);
+    if (m_PcmSize <=data_size *1024 *m_PcmChannel)
+    {
+        return;
+    }
+    memcpy(m_PcmPointer[0], m_Pcm, data_size * 1024 * m_PcmChannel);
+
+    m_PcmSize = m_PcmSize - data_size * 1024 * m_PcmChannel;
+    memcpy(m_Pcm, m_Pcm + data_size * 1024 * m_PcmChannel, m_PcmSize);
+
+    frame->pts = pts;
+    pts += 1024;
+    frame->nb_samples = 1024;
+    frame->format = c->sample_fmt;
     frame->channel_layout = c->channel_layout;
+    frame->sample_rate = c->sample_rate;
+    if (av_frame_get_buffer(frame, 0)<0)
+    {
+        (stderr, "Could not allocate audio data buffers\n");
+        return ;
+    }
 
-    int ret = av_frame_get_buffer(frame, 0);
+    int ret = 0;
+    if (swr_convert(resample_context, frame->extended_data, frame->nb_samples, (const uint8_t**)m_PcmPointer, 1024)<0)
+    {
+        LOGE( "Could not convert input samples (error )\n");
+        if (NULL != frame)
+        {
+            av_frame_unref(frame);
+        }
+        return ;
+    }
+    ret = avcodec_send_frame(c, frame);
     if (ret < 0) {
-        LOGE("Could not allocate audio data buffers\n");
+        LOGE("Error sending the frame to the encoder\n");
+        if (NULL != frame)
+        {
+            av_frame_unref(frame);
+        }
         return;
     }
-
-    /* encode a single tone sound */
-    t = 0;
-    tincr = 2 * M_PI * 440.0 / c->sample_rate;
-    int i = 0 , j = 0 , k = 0;
-    for (i = 0; i < 200; i++) {
-        /* make sure the frame is writable -- makes a copy if the encoder
-         * kept a reference internally */
-        ret = av_frame_make_writable(frame);
-        if (ret < 0)
-            return;
-        samples = (uint16_t*)frame->data[0];
-
-        for (j = 0; j < c->frame_size; j++) {
-            samples[2*j] = (int)(sin(t) * 10000);
-
-            for (k = 1; k < c->channels; k++)
-                samples[2*j + k] = samples[2*j];
-            t += tincr;
-        }
-        encode(c, frame, pkt, f);
+    if (NULL != frame)
+    {
+        av_frame_unref(frame);
     }
+}
+bool Pcm2AAC::GetData(char *&pOutData, int &iSize)
+{
+    int  ret = avcodec_receive_packet(c, packet);
+    if (ret <0)
+    {
+        return false;
+    }
+    AddADTS(packet->size+7);
+    memcpy(m_pOutData+7, packet->data, packet->size);
+    iSize = packet->size+7;
+    pOutData = m_pOutData;
+    av_packet_unref(packet);
+    return true;
+}
+void Pcm2AAC::AddADTS(int packetLen)
+{
+    int profile = 1; // AAC LC
+    int freqIdx = 0xb; // 44.1KHz
+    int chanCfg = m_PcmChannel; // CPE
 
-    /* flush the encoder */
-    encode(c, NULL, pkt, f);
-
-    fclose(f);
-
-    av_frame_free(&frame);
-    av_packet_free(&pkt);
-    avcodec_free_context(&c);
-
+    if (96000 == m_PcmSampleRate)
+    {
+        freqIdx = 0x00;
+    }
+    else if(88200 == m_PcmSampleRate)
+    {
+        freqIdx = 0x01;
+    }
+    else if (64000 == m_PcmSampleRate)
+    {
+        freqIdx = 0x02;
+    }
+    else if (48000 == m_PcmSampleRate)
+    {
+        freqIdx = 0x03;
+    }
+    else if (44100 == m_PcmSampleRate)
+    {
+        freqIdx = 0x04;
+    }
+    else if (32000 == m_PcmSampleRate)
+    {
+        freqIdx = 0x05;
+    }
+    else if (24000 == m_PcmSampleRate)
+    {
+        freqIdx = 0x06;
+    }
+    else if (22050 == m_PcmSampleRate)
+    {
+        freqIdx = 0x07;
+    }
+    else if (16000 == m_PcmSampleRate)
+    {
+        freqIdx = 0x08;
+    }
+    else if (12000 == m_PcmSampleRate)
+    {
+        freqIdx = 0x09;
+    }
+    else if (11025 == m_PcmSampleRate)
+    {
+        freqIdx = 0x0a;
+    }
+    else if (8000 == m_PcmSampleRate)
+    {
+        freqIdx = 0x0b;
+    }
+    else if (7350 == m_PcmSampleRate)
+    {
+        freqIdx = 0xc;
+    }
+    // fill in ADTS data
+    m_pOutData[0] = 0xFF;
+    m_pOutData[1] = 0xF1;
+    m_pOutData[2] = ((profile) << 6) + (freqIdx << 2) + (chanCfg >> 2);
+    m_pOutData[3] = (((chanCfg & 3) << 6) + (packetLen >> 11));
+    m_pOutData[4] = ((packetLen & 0x7FF) >> 3);
+    m_pOutData[5] = (((packetLen & 7) << 5) + 0x1F);
+    m_pOutData[6] = 0xFC;
 }

@@ -13,6 +13,7 @@ public class FFmpegUtils {
      * @param dstPath
      */
     public native void demuxMedia(String path,String dstPath);
+    public native void testdemuxMedia(String path,String dstPath);
 
     /**
      * pcm to acc
@@ -20,5 +21,16 @@ public class FFmpegUtils {
      * @param dstPath
      */
     public native void encoderAudio(String path,String dstPath);
+
+    /**
+     *
+     * @param path
+     * @param dstPath
+     * @param startTime 从第几秒开始剪切
+     * @param cutTime  剪切多少秒
+     */
+    public native void cutFile(String path,String dstPath,int startTime,int cutTime);
+
+    public native void testdecodeMedia(String path,String dstPath);
 
 }

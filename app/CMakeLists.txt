@@ -5,6 +5,7 @@ set(DIR_FFMPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/ffmpeg)
 set(DIR_DEMUX ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/demux)
 set(DIR_COMMON ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/common)
 set(DIR_ENCODER ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/encoder)
+set(DIR_DENCODER ${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/decoder)
 
 # set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${DIR_OS})
 
@@ -13,6 +14,7 @@ include_directories(
         ${DIR_DEMUX}
         ${DIR_COMMON}
         ${DIR_ENCODER}
+        ${DIR_DENCODER}
         )
 
 add_library(avcodec SHARED IMPORTED)
@@ -40,6 +42,8 @@ add_library(
              ${DIR_DEMUX}/demux_media.cpp
 
              ${DIR_ENCODER}/encoder_audio.cpp
+
+              ${DIR_DENCODER}/decoder_media.cpp
 
              src/main/cpp/native-lib.cpp )
 

@@ -6,8 +6,10 @@
 #define FFMPEGMASTER_DEMUX_MEDIA_H
 
 extern "C"{
+#include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
 #include <libavutil/time.h>
+#include <libavutil/mathematics.h>
 };
 
 class DemuxMedia {
@@ -26,6 +28,8 @@ public:
     void closeInput();
     void closeOutput();
 
+    void ffmpegExp();
+
 public:
     int64_t lastReadPacktTime = 0;
 
@@ -38,6 +42,8 @@ private:
 
     int audio_index = -1;
     int video_index = -1;
+
+
 
 };
 

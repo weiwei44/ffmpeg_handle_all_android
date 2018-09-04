@@ -1693,6 +1693,7 @@ typedef struct AVPacket {
     /**
      * Duration of this packet in AVStream->time_base units, 0 if unknown.
      * Equals next_pts - this_pts in presentation order.
+     * // 该数据包在time_base时间内的持续时间
      */
     int64_t duration;
 

@@ -1,53 +1,33 @@
-//
-// Created by BMW on 2018/8/31.
-//
+#pragma once
 
-#ifndef FFMPEGMASTER_ENCODER_AUDIO_H
-#define FFMPEGMASTER_ENCODER_AUDIO_H
-
-#include <string>
 extern "C"{
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
 #include <libswresample/swresample.h>
-};
+#include <libavformat/avformat.h>
 
-class Encoder {
+}
+class Pcm2AAC
+{
 public:
-    Encoder(const char* url,const char* dstUrl);
-    ~Encoder();
+    Pcm2AAC();
+    virtual ~Pcm2AAC();
 
-   void encode(AVCodecContext *ctx, AVFrame *frame, AVPacket *pkt,
-               FILE *output);
+    bool Init(int pcm_Sample_rate, AVSampleFormat pcm_Sample_fmt, int pcm_Channels);
+    void AddData(char *pData, int size);
+    bool GetData(char *&pOutData, int &iSize);
+    void AddADTS(int packetLen);
+    char m_pOutData[1024 * 10];
+    char m_Pcm[10240];
+    int m_PcmSize;
+    char *m_PcmPointer[8];
+    AVSampleFormat m_PcmFormat;
+    int m_PcmChannel;
+    int m_PcmSampleRate;
 
-    void start();
-
-private:
-    FILE * f = NULL;
-    FILE * in_file = NULL;
-
-    int count = 0;
-    int m_PcmSampleRate = 44100;
-
-    char* inputUrl = NULL;
-    char* outputUrl = NULL;
-
-    AVCodec* codec = NULL;
-    AVCodecContext* c = NULL;
-    AVFormatContext* pFormatCtx = NULL;
-    uint16_t *samples;
-    float t, tincr;
-
-    AVStream* audio_st= NULL;
-    AVPacket* pkt = NULL;
-    AVFrame* frame = NULL;
-
-    SwrContext* swrContext = NULL;
-
-
+    AVFrame * frame;
+    AVPacket *packet;
+    AVCodec *codec;
+    AVCodecContext *c = NULL;
+    SwrContext *resample_context = NULL;
     int64_t pts;
-
 };
 
-
-#endif //FFMPEGMASTER_ENCODER_AUDIO_H
