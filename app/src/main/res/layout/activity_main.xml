@@ -33,4 +33,11 @@
         android:text="解码"
         app:layout_constraintLeft_toRightOf="@id/bt_cut"/>
 
+    <Button
+        android:id="@+id/bt_getpic"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="获取图片"
+        app:layout_constraintTop_toBottomOf="@id/bt_decoder_ff"/>
+
 </android.support.constraint.ConstraintLayout>

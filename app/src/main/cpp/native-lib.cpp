@@ -31,7 +31,7 @@ Java_com_mobile_weiwei_utils_FFmpegUtils_demuxMedia(JNIEnv *env, jobject instanc
     demuxMedia->init(path,dstPath);
     int ret = demuxMedia->openInput();
     if(ret >= 0){
-        ret = demuxMedia->openOutput();
+        ret = demuxMedia->openOutput(const_cast<char *>(dstPath));
     }
     if(ret < 0){
         demuxMedia->closeInput();
@@ -118,7 +118,7 @@ Java_com_mobile_weiwei_utils_FFmpegUtils_cutFile(JNIEnv *env, jobject instance, 
     demuxMedia->init(path,dstPath);
     int ret = demuxMedia->openInput();
     if(ret >= 0){
-        ret = demuxMedia->openOutput();
+        ret = demuxMedia->openOutput(const_cast<char *>(dstPath));
     }
     if(ret < 0){
         demuxMedia->closeInput();
@@ -196,6 +196,73 @@ Java_com_mobile_weiwei_utils_FFmpegUtils_testdecodeMedia(JNIEnv *env, jobject in
     decoder->init(path,dstPath);
     decoder->ffmpegExp();
 
+    env->ReleaseStringUTFChars(path_, path);
+    env->ReleaseStringUTFChars(dstPath_, dstPath);
+}extern "C"
+JNIEXPORT void JNICALL
+Java_com_mobile_weiwei_utils_FFmpegUtils_getPic(JNIEnv *env, jobject instance, jstring path_,
+                                                jstring dstPath_) {
+    const char *path = env->GetStringUTFChars(path_, 0);
+    const char *dstPath = env->GetStringUTFChars(dstPath_, 0);
+
+    if(demuxMedia == NULL){
+        demuxMedia = new DemuxMedia();
+    }
+    demuxMedia->init(path,dstPath);
+    int ret = demuxMedia->openInput();
+//    if(ret >= 0){
+//        ret = demuxMedia->openOutput();
+//    }
+    if(ret < 0){
+        demuxMedia->closeInput();
+        demuxMedia->closeOutput();
+        return;
+    }
+    demuxMedia->initDecoder();
+    demuxMedia->initEcoder();
+    ret = demuxMedia->initSws();
+
+    AVFrame* frame = av_frame_alloc();
+    AVPacket* encodePkt = av_packet_alloc();
+
+    int cout = 0;
+    while (true){
+        AVPacket* packet = demuxMedia->readPacketFromSource();
+        if(packet){
+            if(packet->stream_index == demuxMedia->video_index) {
+                if (!demuxMedia->decoder(packet, frame)) {
+                    continue;
+                }
+
+                if (!demuxMedia->ecoder(encodePkt)) {
+                    continue;
+                }
+                if (encodePkt) {
+//                    ret = demuxMedia->writePacket(encodePkt);
+//                    break;
+//                    if(ret == 0)
+//                    {
+//                        cout++;
+//                        if(cout == 100){
+//                            break;
+//                        }
+//                        continue;
+//                    }
+                }
+            }else{
+                av_packet_unref(packet);
+                continue;
+            }
+        } else{
+            LOGE("结束");
+            av_packet_free(&packet);
+            demuxMedia->closeInput();
+            demuxMedia->closeOutput();
+            break;
+        }
+    }
+
+    LOGE("over");
     env->ReleaseStringUTFChars(path_, path);
     env->ReleaseStringUTFChars(dstPath_, dstPath);
 }

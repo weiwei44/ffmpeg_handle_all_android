@@ -31,6 +31,18 @@ public class FFmpegUtils {
      */
     public native void cutFile(String path,String dstPath,int startTime,int cutTime);
 
+    /**
+     * 剪切音视频
+     * @param path
+     * @param dstPath
+     */
     public native void testdecodeMedia(String path,String dstPath);
+
+    /**
+     * 获取图片
+     * @param path
+     * @param dstPath
+     */
+    public native void getPic(String path,String dstPath);
 
 }

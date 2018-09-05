@@ -290,7 +290,7 @@ void Decoder::ffmpegExp() {
             }else if(packet->stream_index == video_index){
 
                 //ret = av_dict_set(&pctx->streams[video_index]->metadata,"rotate","90",0);
-                ret = av_dict_set(&pctx->streams[video_index]->metadata,"rotate","180",0); //设置旋转角度
+               // ret = av_dict_set(&pctx->streams[video_index]->metadata,"rotate","180",0); //设置旋转角度
 
                 // 视频解码
                 out_buffer = (uint8_t *) av_malloc

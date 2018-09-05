@@ -59,6 +59,11 @@ public class MainActivity extends AppCompatActivity {
 
         );
 
+        Button bt_getpic = findViewById(R.id.bt_getpic);
+        bt_getpic.setOnClickListener(v->
+                new Thread(() -> utils.getPic(rtmpPath, "/storage/emulated/0/weiwei")).start()
+        );
+
     }
 
     @SuppressLint("CheckResult")

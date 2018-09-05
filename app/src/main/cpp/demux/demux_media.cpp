@@ -1,11 +1,18 @@
 //
 // Created by BMW on 2018/8/30.
+// 额，包含了音视频转码，剪切，提取图片，代码有点凌乱，以后提取一下。。
 //
+
+
+#ifndef METHOD_1
+#define METHOD_1
+#endif
 
 #ifndef INT64_C
 #define INT64_C(c) (c ## LL)
 #define UINT64_C(c) (c ## ULL)
 #endif
+
 
 #include "demux_media.h"
 #include "AndroidLog.h"
@@ -69,13 +76,15 @@ int DemuxMedia::openInput() {
     return ret;
 }
 
-int DemuxMedia::openOutput() {
+int DemuxMedia::openOutput( char* dstUrl) {
     // 结合ffmpeg实例总结，此处不需要guess输出流封装格式，avformat_alloc_output_context2会调用
     // 输出流格式 flv rtmp流 ，mpegts裸流
    // int ret = avformat_alloc_output_context2(&outputContext,NULL,"mpegts",dstFilePath);
-    AVOutputFormat *fmt = av_guess_format(NULL, dstFilePath, NULL);
-    LOGE("fmt name = %s",fmt->name);
-    int ret = avformat_alloc_output_context2(&outputContext,NULL,fmt->name,dstFilePath);
+
+//    AVOutputFormat *fmt = av_guess_format("mjpeg", dstFilePath, NULL);
+//    LOGE("AVOutputFormat fmt name = %s",fmt->name);
+
+    int ret = avformat_alloc_output_context2(&outputContext,NULL,NULL,dstUrl);
 
     if(ret < 0){
         char buf[1024] = {0};
@@ -83,7 +92,7 @@ int DemuxMedia::openOutput() {
         LOGE("FFDemux avformat_alloc_output_context2 %s , failed!",buf);
         return ret;
     }
-    ret = avio_open2(&outputContext->pb,dstFilePath,AVIO_FLAG_WRITE,0,0);
+    ret = avio_open2(&outputContext->pb,dstUrl,AVIO_FLAG_WRITE,0,0);
     if(ret < 0){
         char buf[1024] = {0};
         av_strerror(ret,buf, sizeof(buf));
@@ -92,22 +101,24 @@ int DemuxMedia::openOutput() {
     }
 
     for(int i = 0;i<inputContext->nb_streams;i++){
-        AVStream* stream = avformat_new_stream(outputContext,NULL);
-        if(!stream){
-            LOGE("avformat_new_stream failed");
-        }
-        ret = avcodec_parameters_copy(outputContext->streams[i]->codecpar, inputContext->streams[i]->codecpar);
-        if(ret < 0)
-        {
-            LOGE("copy coddec context failed");
-            goto Error;
+        if(inputContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            AVStream *stream = avformat_new_stream(outputContext, NULL);
+            if (!stream) {
+                LOGE("avformat_new_stream failed");
+            }
+            ret = avcodec_parameters_copy(outputContext->streams[i]->codecpar,
+                                          inputContext->streams[i]->codecpar);
+            if (ret < 0) {
+                LOGE("copy coddec context failed");
+                goto Error;
+            }
         }
     }
 
     ret = avformat_write_header(outputContext, nullptr);
     if(ret < 0)
     {
-        LOGE("format write header failed");
+        LOGE("format write header failed %s",av_err2str(ret));
         goto Error;
     }
 
@@ -145,10 +156,73 @@ AVPacket* DemuxMedia::readPacketFromSource() {
     }
 }
 
+int DemuxMedia::initDecoder() {
+    video_index = av_find_best_stream(inputContext,AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
+    AVStream* stream = inputContext->streams[video_index];
+
+    AVCodec *codec = avcodec_find_decoder(stream->codecpar->codec_id);
+    if(!codec){
+        return -1;
+    }
+    pDecoderCodecCtx = avcodec_alloc_context3(codec);
+    int ret = avcodec_parameters_to_context(pDecoderCodecCtx,stream->codecpar);
+    if(ret < 0){
+        LOGE("pDecoderCodecCtx avcodec_parameters_to_context");
+        return ret;
+    }
+    ret = avcodec_open2(pDecoderCodecCtx,codec,NULL);
+    if(ret != 0){
+        LOGE("pDecoderCodecCtx avcodec_open2");
+        return ret;
+    }
+
+    return 0;
+}
+
+int DemuxMedia::initEcoder() {
+    video_index = av_find_best_stream(inputContext,AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
+    AVStream* stream = inputContext->streams[video_index];
+
+//    AVOutputFormat *fmt = av_guess_format("mjpeg", dstFilePath, NULL);
+//    LOGE("fmt name = %s",fmt->name);
+//    AVCodec* codec = avcodec_find_encoder(fmt->video_codec);
+    AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_MJPEG);
+    if(!codec){
+        LOGE("pEncoderCodecCtx avcodec_find_encoder");
+        return -1;
+    }
+    LOGE("format = %d",*codec->pix_fmts);
+    pEncoderCodecCtx = avcodec_alloc_context3(codec);
+    pEncoderCodecCtx->time_base.num = stream->time_base.num;
+    pEncoderCodecCtx->time_base.den = stream->time_base.den;
+    pEncoderCodecCtx->pix_fmt = *codec->pix_fmts;
+    pEncoderCodecCtx->width = stream->codecpar->width;
+    pEncoderCodecCtx->height = stream->codecpar->height;
+//    pEncoderCodecCtx->codec_id = fmt->video_codec;
+    pEncoderCodecCtx->codec_type = AVMEDIA_TYPE_VIDEO;
+
+    int ret = avcodec_open2(pEncoderCodecCtx, codec, NULL);
+    if (ret < 0)
+    {
+        LOGE("pEncoderCodecCtx avcodec_open2");
+        return  ret;
+    }
+
+    //初始化转格式,编码格式yuvj420p,解码格式Yuv420p
+
+    return 0;
+}
+
 int DemuxMedia::writePacket(AVPacket* packet) {
     auto inputStream = inputContext->streams[packet->stream_index];
     auto outputStream = outputContext->streams[packet->stream_index];
     av_packet_rescale_ts(packet,inputStream->time_base,outputStream->time_base);
+//    if(packet->flags &AV_PKT_FLAG_KEY )
+//    {
+//        LOGE("关键帧");
+//    }
+
+
     return av_interleaved_write_frame(outputContext, packet);
 }
 
@@ -182,7 +256,6 @@ void DemuxMedia::ffmpegExp() {
     int stream_index = 0;
     int *stream_mapping = NULL;  //保存每个流的index
     int stream_mapping_size = 0; //流数量
-    int packetCount = 0;
 
     if((ret = avformat_open_input(&ifmt_ctx,filePath,0,0)) < 0){
         LOGE("avformat_open_input error");
@@ -319,6 +392,7 @@ void DemuxMedia::ffmpegExp() {
         ret = av_interleaved_write_frame(ofmt_ctx, &pkt);
         if (ret < 0) {
             LOGE( "Error muxing packet == %s",av_err2str(ret));
+            av_packet_unref(&pkt);
             break;
         }
         av_packet_unref(&pkt);
@@ -338,3 +412,139 @@ end:
         return;
     }
 }
+
+bool DemuxMedia::decoder(AVPacket* pkt,AVFrame*frame) {
+    if(!pkt->flags &AV_PKT_FLAG_KEY )
+    {
+        // 过滤B,P帧
+        return false;
+    }
+    int ret;
+    ret = avcodec_send_packet(pDecoderCodecCtx, pkt);
+    if (ret < 0) {
+        LOGE("Error submitting the packet to the decoder\n");
+        av_packet_unref(pkt);
+        av_frame_unref(frame);
+        return false;
+    }
+
+    while (ret >= 0) {
+        ret = avcodec_receive_frame(pDecoderCodecCtx, frame);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            av_packet_unref(pkt);
+            av_frame_unref(frame);
+            return false;
+        }else if (ret < 0) {
+            av_packet_unref(pkt);
+            av_frame_unref(frame);
+            LOGE("Error during decoding\n");
+            return false;
+        }
+
+
+        int height = sws_scale(vctx,
+                          (const uint8_t *const *) frame->data, frame->linesize, 0, pDecoderCodecCtx->height,
+                          pFrame->data, pFrame->linesize);
+
+        pFrame->width = pDecoderCodecCtx->width;
+        pFrame->height = pDecoderCodecCtx->height;
+        pFrame->format = pEncoderCodecCtx->pix_fmt;
+
+        av_packet_unref(pkt);
+        av_frame_unref(frame);
+        break;
+    }
+    return true;
+}
+
+bool DemuxMedia::ecoder(AVPacket *pkt) {
+
+
+//    int ret = av_frame_make_writable(pFrame);
+//    if(ret != 0){
+//        LOGE("ret = %d,result = %s",ret,av_err2str(ret));
+//        return false;
+//    }
+
+    int ret = avcodec_send_frame(pEncoderCodecCtx,pFrame);
+    if (ret < 0) {
+        LOGE("ecoder avcodec_send_frame %lld, %s",pkt->pos,av_err2str(ret));
+        av_packet_unref(pkt);
+        av_frame_unref(pFrame);
+        return false;
+    }
+
+    while (ret >= 0) {
+        ret = avcodec_receive_packet(pEncoderCodecCtx, pkt);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            av_packet_unref(pkt);
+            av_frame_unref(pFrame);
+            return false;
+        }else if (ret < 0) {
+            av_packet_unref(pkt);
+            av_frame_unref(pFrame);
+            LOGE("ecoder avcodec_receive_packet");
+            return false;
+        }
+        char* file_name = new char[1024];
+        picFileName(file_name);
+
+#ifdef METHOD_1
+        LOGE("file_name------------ %s",file_name);
+        save_pic1(file_name,pkt);
+#else
+        openOutput(file_name);
+        writePacket(pkt);
+#endif
+
+        break;
+    }
+    return true;
+}
+
+int DemuxMedia::initSws() {
+    // 初始化转格式上下文
+    pFrame = av_frame_alloc();
+    out_buffer = (uint8_t *) av_malloc
+            ((size_t) av_image_get_buffer_size(pEncoderCodecCtx->pix_fmt, pDecoderCodecCtx->width, pDecoderCodecCtx->height, 1));
+    //初始化缓冲区
+    av_image_fill_arrays(pFrame->data, pFrame->linesize,
+                         out_buffer,
+                         pEncoderCodecCtx->pix_fmt, pDecoderCodecCtx->width, pDecoderCodecCtx->height, 1);
+
+    vctx = sws_getContext(
+            pDecoderCodecCtx->width,  pDecoderCodecCtx->height, pDecoderCodecCtx->pix_fmt,
+            pDecoderCodecCtx->width,  pDecoderCodecCtx->height, pEncoderCodecCtx->pix_fmt,
+            SWS_FAST_BILINEAR,
+            0, 0, 0);
+    return 0;
+}
+
+void DemuxMedia::picFileName(char* file_name) {
+
+    if (dstFilePath[strlen(dstFilePath) - 1] == '/')
+    {
+        sprintf(file_name,"%sM1_weiwei%d.jpg",dstFilePath,count);
+    }
+    else
+    {
+        sprintf(file_name,"%s/M1_weiwei%d.jpg",dstFilePath,count);
+    }
+    count++;
+
+}
+
+void DemuxMedia::save_pic1(char*path,AVPacket* pkt) {
+    FILE* file = fopen(path,"wb");
+    if(!file){
+        LOGE("open failed");
+        return;
+    }
+    int size = fwrite(pkt->data, sizeof(uint8_t),pkt->size,file);
+    fclose(file);
+    av_packet_unref(pkt);
+}
+
+
+
+
